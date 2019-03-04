@@ -184,9 +184,63 @@ func (c *RawKVClient) BatchPut(keys, values [][]byte) error {
 		}
 	}
 	bo := NewBackoffer(context.Background(), rawkvMaxBackoff)
-	err := c.sendBatchPut(bo, keys, values)
+	err := c.sendBatchPut(bo, keys, values, tikvrpc.CmdRawBatchPut)
 	return errors.Trace(err)
 }
+
+// Update updates a key-value pair to TiKV.
+func (c *RawKVClient) Update(key, value []byte) error {
+	start := time.Now()
+	defer func() { metrics.TiKVRawkvCmdHistogram.WithLabelValues("update").Observe(time.Since(start).Seconds()) }()
+	metrics.TiKVRawkvSizeHistogram.WithLabelValues("key").Observe(float64(len(key)))
+	metrics.TiKVRawkvSizeHistogram.WithLabelValues("value").Observe(float64(len(value)))
+
+	if len(value) == 0 {
+		return errors.New("empty value is not supported")
+	}
+
+	req := &tikvrpc.Request{
+		Type: tikvrpc.CmdRawUpdate,
+		RawUpdate: &kvrpcpb.RawUpdateRequest{
+			Key:   key,
+			Value: value,
+		},
+	}
+	resp, _, err := c.sendReq(key, req, false)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	cmdResp := resp.RawUpdate
+	if cmdResp == nil {
+		return errors.Trace(ErrBodyMissing)
+	}
+	if cmdResp.GetError() != "" {
+		return errors.New(cmdResp.GetError())
+	}
+	return nil
+}
+
+
+// BatchUpdate updates key-value pairs to TiKV.
+func (c *RawKVClient) BatchUpdate(keys, values [][]byte) error {
+	start := time.Now()
+	defer func() {
+		metrics.TiKVRawkvCmdHistogram.WithLabelValues("batch_update").Observe(time.Since(start).Seconds())
+	}()
+
+	if len(keys) != len(values) {
+		return errors.New("the len of keys is not equal to the len of values")
+	}
+	for _, value := range values {
+		if len(value) == 0 {
+			return errors.New("empty value is not supported")
+		}
+	}
+	bo := NewBackoffer(context.Background(), rawkvMaxBackoff)
+	err := c.sendBatchPut(bo, keys, values, tikvrpc.CmdRawBatchUpdate)
+	return errors.Trace(err)
+}
+
 
 // Delete deletes a key-value pair from TiKV.
 func (c *RawKVClient) Delete(key []byte) error {
@@ -544,7 +598,7 @@ func (c *RawKVClient) sendDeleteRangeReq(startKey []byte, endKey []byte) (*tikvr
 	}
 }
 
-func (c *RawKVClient) sendBatchPut(bo *Backoffer, keys, values [][]byte) error {
+func (c *RawKVClient) sendBatchPut(bo *Backoffer, keys, values [][]byte, cmdType tikvrpc.CmdType) error {
 	keyToValue := make(map[string][]byte)
 	for i, key := range keys {
 		keyToValue[string(key)] = values[i]
@@ -565,7 +619,7 @@ func (c *RawKVClient) sendBatchPut(bo *Backoffer, keys, values [][]byte) error {
 		go func() {
 			singleBatchBackoffer, singleBatchCancel := bo.Fork()
 			defer singleBatchCancel()
-			ch <- c.doBatchPut(singleBatchBackoffer, batch1)
+			ch <- c.doBatchPut(singleBatchBackoffer, batch1, cmdType)
 		}()
 	}
 
@@ -621,17 +675,28 @@ func appendBatches(batches []batch, regionID RegionVerID, groupKeys [][]byte, ke
 	return batches
 }
 
-func (c *RawKVClient) doBatchPut(bo *Backoffer, batch batch) error {
+func (c *RawKVClient) doBatchPut(bo *Backoffer, batch batch, cmdType tikvrpc.CmdType) error {
 	kvPair := make([]*kvrpcpb.KvPair, 0, len(batch.keys))
 	for i, key := range batch.keys {
 		kvPair = append(kvPair, &kvrpcpb.KvPair{Key: key, Value: batch.values[i]})
 	}
 
-	req := &tikvrpc.Request{
-		Type: tikvrpc.CmdRawBatchPut,
-		RawBatchPut: &kvrpcpb.RawBatchPutRequest{
-			Pairs: kvPair,
-		},
+	var req *tikvrpc.Request
+	switch cmdType {
+	case tikvrpc.CmdRawBatchPut:
+		req = &tikvrpc.Request{
+			Type: tikvrpc.CmdRawBatchPut,
+			RawBatchPut: &kvrpcpb.RawBatchPutRequest{
+				Pairs: kvPair,
+			},
+		}
+	case tikvrpc.CmdRawBatchUpdate:
+		req = &tikvrpc.Request{
+			Type: cmdType,
+			RawBatchUpdate: &kvrpcpb.RawBatchUpdateRequest{
+				Pairs: kvPair,
+			},
+		}
 	}
 
 	sender := NewRegionRequestSender(c.regionCache, c.rpcClient)
@@ -649,15 +714,26 @@ func (c *RawKVClient) doBatchPut(bo *Backoffer, batch batch) error {
 			return errors.Trace(err)
 		}
 		// recursive call
-		return c.sendBatchPut(bo, batch.keys, batch.values)
+		return c.sendBatchPut(bo, batch.keys, batch.values, cmdType)
 	}
 
-	cmdResp := resp.RawBatchPut
-	if cmdResp == nil {
-		return errors.Trace(ErrBodyMissing)
-	}
-	if cmdResp.GetError() != "" {
-		return errors.New(cmdResp.GetError())
+	switch cmdType {
+	case tikvrpc.CmdRawBatchPut:
+		cmdResp := resp.RawBatchPut
+		if cmdResp == nil {
+			return errors.Trace(ErrBodyMissing)
+		}
+		if cmdResp.GetError() != "" {
+			return errors.New(cmdResp.GetError())
+		}
+	case tikvrpc.CmdRawBatchUpdate:
+		cmdResp2 := resp.RawBatchUpdate
+		if cmdResp2 == nil {
+			return errors.Trace(ErrBodyMissing)
+		}
+		if cmdResp2.GetError() != "" {
+			return errors.New(cmdResp2.GetError())
+		}
 	}
 	return nil
 }
