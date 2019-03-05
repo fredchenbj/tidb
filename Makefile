@@ -11,8 +11,9 @@ CURDIR := $(shell pwd)
 path_to_add := $(addsuffix /bin,$(subst :,/bin:,$(GOPATH)))
 export PATH := $(path_to_add):$(PATH)
 
+GOMOD := -mod=vendor
 GO        := GO111MODULE=on go
-GOBUILD   := CGO_ENABLED=1 $(GO) build $(BUILD_FLAG)
+GOBUILD   := CGO_ENABLED=1 $(GO) build $(GOMOD) $(BUILD_FLAG)
 GOTEST    := CGO_ENABLED=1 $(GO) test -p 3
 OVERALLS  := CGO_ENABLED=1 GO111MODULE=on overalls
 
@@ -226,3 +227,6 @@ tools/bin/errcheck: tools/check/go.mod
 
 tools/bin/gofail: go.mod
 	$(GO) build -o $@ github.com/pingcap/gofail
+
+vendor:
+	GO111MODULE=on go mod vendor
