@@ -1031,6 +1031,7 @@ func (r *Region) getStorePeer(rs *RegionStore, pidx int32) (store *Store, peer *
 	store = rs.stores[pidx]
 	peer = r.meta.Peers[pidx]
 	idx = int(pidx)
+	logutil.BgLogger().Info("replica read: ", zap.Int("store_id", idx))
 	return
 }
 
