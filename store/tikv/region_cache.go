@@ -99,17 +99,18 @@ func (r *RegionStore) follower(seed uint32) int32 {
 		return r.workTiKVIdx
 	}
 
-	for retry := l - 1; retry > 0; retry-- {
-		followerIdx := int32(seed % (l - 1))
-		if followerIdx >= r.workTiKVIdx {
-			followerIdx++
-		}
-		if r.stores[followerIdx].storeType != kv.TiKV {
-			continue
-		}
-		if r.storeFails[followerIdx] == atomic.LoadUint32(&r.stores[followerIdx].fail) {
-			return followerIdx
-		}
+	for retry := l ; retry > 0; retry-- {
+		followerIdx := int32(seed % (l))
+		return followerIdx
+		//if followerIdx >= r.workTiKVIdx {
+		//	followerIdx++
+		//}
+		//if r.stores[followerIdx].storeType != kv.TiKV {
+		//	continue
+		//}
+		//if r.storeFails[followerIdx] == atomic.LoadUint32(&r.stores[followerIdx].fail) {
+		//	return followerIdx
+		//}
 		seed++
 	}
 	return r.workTiKVIdx
