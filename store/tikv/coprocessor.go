@@ -661,6 +661,7 @@ func (worker *copIteratorWorker) handleTaskOnce(bo *Backoffer, task *copTask, ch
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	
 	// Set task.storeAddr field so its task.String() method have the store address information.
 	task.storeAddr = sender.storeAddr
 	costTime := time.Since(startTime)

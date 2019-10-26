@@ -724,7 +724,7 @@ var defaultSysVars = []*SysVar{
 	{ScopeSession, TiDBLowResolutionTSO, "0"},
 	{ScopeSession, TiDBExpensiveQueryTimeThreshold, strconv.Itoa(DefTiDBExpensiveQueryTimeThreshold)},
 	{ScopeGlobal | ScopeSession, TiDBEnableNoopFuncs, BoolToIntStr(DefTiDBEnableNoopFuncs)},
-	{ScopeSession, TiDBReplicaRead, "leader"},
+	{ScopeSession, TiDBReplicaRead, "follower"},
 	{ScopeSession, TiDBAllowRemoveAutoInc, BoolToIntStr(DefTiDBAllowRemoveAutoInc)},
 	{ScopeGlobal | ScopeSession, TiDBEnableStmtSummary, "0"},
 	{ScopeGlobal | ScopeSession, TiDBCapturePlanBaseline, "0"},

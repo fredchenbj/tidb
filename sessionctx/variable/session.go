@@ -942,7 +942,7 @@ func (s *SessionVars) SetSystemVar(name string, val string) error {
 		if strings.EqualFold(val, "follower") {
 			s.SetReplicaRead(kv.ReplicaReadFollower)
 		} else if strings.EqualFold(val, "leader") || len(val) == 0 {
-			s.SetReplicaRead(kv.ReplicaReadLeader)
+			s.SetReplicaRead(kv.ReplicaReadFollower)
 		}
 	case TiDBAllowRemoveAutoInc:
 		s.AllowRemoveAutoInc = TiDBOptOn(val)
