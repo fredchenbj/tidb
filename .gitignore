@@ -6,7 +6,6 @@ coverage.out
 *.iml
 *.swp
 *.log
-tags
 profile.coverprofile
 explain_test
 cmd/explaintest/explain-test.out
