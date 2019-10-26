@@ -597,7 +597,7 @@ func ValidateSetSystemVar(vars *SessionVars, name string, value string) (string,
 		if strings.EqualFold(value, "follower") {
 			return "follower", nil
 		} else if strings.EqualFold(value, "leader") || len(value) == 0 {
-			return "leader", nil
+			return "follower", nil
 		}
 		return value, ErrWrongValueForVar.GenWithStackByArgs(name, value)
 	case TiDBTxnMode:
